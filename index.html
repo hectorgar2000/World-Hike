@@ -1,129 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pokedex</title>
-    <meta name="author" content="Sergio Rodriguez" />
-    <link rel="shortcut icon" type="image/png" href="assets/img/favicon.png" />
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>World Hike</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
 
-    <link
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;500;900&display=swap"
-      rel="stylesheet"
-    />
-
-    <link
-      rel="stylesheet"
-      href="https://use.fontawesome.com/releases/v5.6.3/css/all.css"
-      integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/"
-      crossorigin="anonymous"
-    />
-
-    <link
-      rel="stylesheet"
-      href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
-      integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh"
-      crossorigin="anonymous"
-    />
-
-    <link rel="stylesheet" href="assets/css/style.css" />
-  </head>
-
-  <body>
-    <header>
-      <div class="container header">
-        <div class="row">
-          <img
-            class="header__logo"
-            id="header__home"
-            src="assets/img/logo.png"
-            alt=""
-          />
-        </div>
+  <!-- ── Setup Screen ── -->
+  <div id="screen-setup" class="screen active">
+    <div class="setup-card">
+      <div class="setup-logo">
+        <span class="logo-icon">🥾</span>
+        <h1>World Hike</h1>
+        <p>Camina de verdad. Explora el mundo.</p>
       </div>
 
-      <div class="container search">
-        <div class="search__align">
-          <div class="row">
-            <div class="search__content col-12 col-md-6">
-              <form class="form">
-                <div class="search__number">
-                  <i class="fas fa-search search__icon-search"></i>
-                  <input
-                    class="form-control search__input"
-                    id="idPokemon"
-                    type="text"
-                    placeholder="Busca tu pokemon"
-                  />
-                  <button
-                    class="btn search__btn"
-                    id="search__button"
-                    type="button"
-                  >
-                    Buscar
-                  </button>
-                </div>
-                <div class="input-group-append"></div>
-              </form>
-            </div>
+      <div class="field">
+        <label for="input-apikey">Google Maps API Key</label>
+        <input type="text" id="input-apikey" placeholder="AIza..." autocomplete="off" spellcheck="false">
+        <small>Guardada solo en tu dispositivo. Activa Directions API y Elevation API en Google Cloud.</small>
+      </div>
 
-            <div class="search__content col-12 col-md-6">
-              <div class="input-group">
-                <select class="custom-select" id="search__select">
-                  <option disabled selected class="search__option">
-                    Tipo de pokemon
-                  </option>
-                </select>
-                <div class="input-group-append">
-                  <button
-                    class="btn search__btn"
-                    id="search__button-type"
-                    type="button"
-                  >
-                    Buscar
-                  </button>
-                  <i class="fas fa-caret-down search__icon-down"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="field">
+        <label for="input-start">Punto de partida</label>
+        <input type="text" id="input-start" placeholder="ej: Santiago de Compostela, España">
+      </div>
+
+      <div class="field">
+        <label for="input-end">Destino</label>
+        <input type="text" id="input-end" placeholder="ej: Lisboa, Portugal">
+      </div>
+
+      <button id="btn-calculate" class="btn-primary">Calcular ruta →</button>
+
+      <div id="setup-status" class="status-msg hidden"></div>
+    </div>
+  </div>
+
+  <!-- ── Hike Screen ── -->
+  <div id="screen-hike" class="screen">
+
+    <header class="hike-header">
+      <button id="btn-back" class="btn-icon" title="Nueva ruta">‹</button>
+      <div class="route-label">
+        <span id="label-start">—</span>
+        <span class="arrow">→</span>
+        <span id="label-end">—</span>
+      </div>
+      <div class="header-dist">
+        <span id="stat-progress-km">0.0</span>
+        <span class="unit"> / </span>
+        <span id="stat-total-km">—</span>
+        <span class="unit"> km</span>
       </div>
     </header>
 
-    <section>
-      <div class="container">
-        <div class="row main justify-content-around"></div>
-        <div class="navegation justify-content-center align-items-center mt-5">
-          <div class="text"></div>
-          <button id="navegation__next">
-            <p>Ver más pokemones</p>
-            <i class="fa fa-chevron-down" aria-hidden="true"></i>
-          </button>
-          <button id="navegation__back">
-            <i class="fa fa-chevron-left" aria-hidden="true"></i>
-            <p>Volver</p>
-          </button>
+    <!-- Terrain Canvas -->
+    <div class="terrain-wrap">
+      <canvas id="canvas-terrain"></canvas>
+      <div class="terrain-overlay">
+        <div id="badge-elevation" class="badge">— m</div>
+        <div id="badge-biome" class="badge badge-biome">—</div>
+      </div>
+      <div id="scroll-hint" class="scroll-hint">← Arrastra para ver el camino recorrido</div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-track">
+      <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+    </div>
+
+    <!-- Stats + Input -->
+    <div class="bottom-panel">
+      <div class="stats-row">
+        <div class="stat-block">
+          <div class="stat-num" id="stat-steps">0</div>
+          <div class="stat-lbl">pasos</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num" id="stat-km-done">0.0</div>
+          <div class="stat-lbl">km hechos</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num" id="stat-km-left">—</div>
+          <div class="stat-lbl">km restantes</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num" id="stat-elev-gain">0</div>
+          <div class="stat-lbl">m subidos</div>
         </div>
       </div>
-    </section>
 
-    <script
-      src="https://code.jquery.com/jquery-3.4.1.js"
-      integrity="sha256-WpOohJOqMqqyKL9FccASB9O0KwACQJpFTUBLTYOVvVU="
-      crossorigin="anonymous"
-    ></script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
-      integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
-      crossorigin="anonymous"
-    ></script>
-    <script
-      src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
-      integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
-      crossorigin="anonymous"
-    ></script>
-    <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
-    <script src="assets/js/script.js"></script>
-  </body>
+      <div class="input-row">
+        <input type="number" id="input-steps-add" class="steps-input"
+               placeholder="Añadir pasos de hoy" min="0" step="100">
+        <button id="btn-add-steps" class="btn-primary">+</button>
+      </div>
+
+      <div class="import-row">
+        <label class="btn-secondary" for="input-health-file">
+          📥 Importar Apple Health XML
+        </label>
+        <input type="file" id="input-health-file" accept=".xml" style="display:none">
+        <span id="import-status" class="import-status"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="assets/js/main.js"></script>
+</body>
 </html>
