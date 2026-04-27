@@ -3,17 +3,27 @@
 
 import { detectBiome } from './biome.js';
 
+const DIRECTIONS_TIMEOUT_MS = 15_000;
+
 export class RouteService {
   init() {
     this.directions = new google.maps.DirectionsService();
-    this.elevation = new google.maps.ElevationService();
+    this.elevation  = new google.maps.ElevationService();
+    this.geocoder   = new google.maps.Geocoder();
   }
 
   _calcRoute(origin, destination, mode) {
     return new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('timeout')),
+        DIRECTIONS_TIMEOUT_MS
+      );
       this.directions.route(
         { origin, destination, travelMode: mode },
-        (res, status) => status === 'OK' ? resolve(res) : reject(new Error(`Ruta no encontrada (${status}). Prueba con ciudades más conocidas.`))
+        (res, status) => {
+          clearTimeout(timer);
+          status === 'OK' ? resolve(res) : reject(new Error(status));
+        }
       );
     });
   }
@@ -27,55 +37,98 @@ export class RouteService {
     });
   }
 
-  _extractPath(directionsResult) {
+  _geocode(address) {
+    return new Promise((resolve, reject) => {
+      this.geocoder.geocode({ address }, (results, status) => {
+        if (status === 'OK') resolve(results[0]);
+        else reject(new Error(`No se encontró "${address}"`));
+      });
+    });
+  }
+
+  _extractPath(dir) {
     const path = [];
-    directionsResult.routes[0].legs.forEach(leg =>
-      leg.steps.forEach(step =>
-        step.path.forEach(pt => path.push(pt))
-      )
+    dir.routes[0].legs.forEach(leg =>
+      leg.steps.forEach(step => step.path.forEach(pt => path.push(pt)))
     );
     return path;
   }
 
-  _totalDistanceM(directionsResult) {
-    return directionsResult.routes[0].legs.reduce((s, l) => s + l.distance.value, 0);
+  _totalDistanceM(dir) {
+    return dir.routes[0].legs.reduce((s, l) => s + l.distance.value, 0);
+  }
+
+  // Straight-line interpolation between two geocoded points.
+  // Used as fallback when Directions API can't find a route.
+  async _straightLine(origin, destination) {
+    const [a, b] = await Promise.all([
+      this._geocode(origin),
+      this._geocode(destination),
+    ]);
+    const la = a.geometry.location, lb = b.geometry.location;
+    const distanceM = google.maps.geometry.spherical.computeDistanceBetween(la, lb);
+    const N = 100;
+    const path = Array.from({ length: N + 1 }, (_, i) => {
+      const t = i / N;
+      return new google.maps.LatLng(
+        la.lat() + (lb.lat() - la.lat()) * t,
+        la.lng() + (lb.lng() - la.lng()) * t,
+      );
+    });
+    return {
+      path,
+      distanceM,
+      startName: a.formatted_address,
+      endName:   b.formatted_address,
+    };
   }
 
   async buildRoute(origin, destination, onStatus) {
     onStatus('Calculando ruta...');
 
-    // Try walking first, fall back to driving for long routes
-    let dir;
+    let path, distanceM, startName, endName;
+
+    // 1. Try walking
     try {
-      dir = await this._calcRoute(origin, destination, google.maps.TravelMode.WALKING);
-    } catch (_) {
-      onStatus('Ruta a pie no disponible, usando modo conducción...');
-      dir = await this._calcRoute(origin, destination, google.maps.TravelMode.DRIVING);
+      const dir = await this._calcRoute(origin, destination, google.maps.TravelMode.WALKING);
+      path        = this._extractPath(dir);
+      distanceM   = this._totalDistanceM(dir);
+      startName   = dir.routes[0].legs[0].start_address;
+      endName     = dir.routes[0].legs.at(-1).end_address;
+    } catch (_walkErr) {
+      // 2. Try driving
+      try {
+        onStatus('Ruta a pie no disponible, probando en coche...');
+        const dir = await this._calcRoute(origin, destination, google.maps.TravelMode.DRIVING);
+        path        = this._extractPath(dir);
+        distanceM   = this._totalDistanceM(dir);
+        startName   = dir.routes[0].legs[0].start_address;
+        endName     = dir.routes[0].legs.at(-1).end_address;
+      } catch (_driveErr) {
+        // 3. Straight-line fallback (always works for any two places on Earth)
+        onStatus('Calculando ruta en línea recta con altitudes reales...');
+        ({ path, distanceM, startName, endName } = await this._straightLine(origin, destination));
+      }
     }
 
-    const path = this._extractPath(dir);
-    const totalDistanceM = this._totalDistanceM(dir);
-    const leg0 = dir.routes[0].legs[0];
-    const legN = dir.routes[0].legs[dir.routes[0].legs.length - 1];
-
     onStatus('Obteniendo perfil de altitud...');
-    const samples = Math.min(512, Math.max(80, Math.floor(totalDistanceM / 150)));
+    const samples = Math.min(512, Math.max(80, Math.floor(distanceM / 150)));
     const elevResults = await this._getElevation(path, samples);
 
     onStatus('Detectando biomas y terreno...');
 
-    // Build elevation profile with cumulative distance
     const n = elevResults.length;
     const points = elevResults.map((r, i) => ({
-      distanceM: (i / (n - 1)) * totalDistanceM,
+      distanceM: (i / (n - 1)) * distanceM,
       elevation: r.elevation,
-      lat: r.location.lat(),
-      lng: r.location.lng(),
-      biome: null,
+      lat:       r.location.lat(),
+      lng:       r.location.lng(),
+      biome:     null,
     }));
 
-    // Detect biome every ~10 points, then fill gaps
-    for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 50))) {
+    // Sample biome every ~2% of points, then fill gaps
+    const step = Math.max(1, Math.floor(n / 50));
+    for (let i = 0; i < n; i += step) {
       const p = points[i];
       p.biome = detectBiome(p.lat, p.lng, p.elevation);
     }
@@ -85,11 +138,6 @@ export class RouteService {
       else p.biome = last;
     }
 
-    return {
-      points,
-      totalDistanceM,
-      startName: leg0.start_address,
-      endName: legN.end_address,
-    };
+    return { points, totalDistanceM: distanceM, startName, endName };
   }
 }

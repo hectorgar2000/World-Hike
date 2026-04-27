@@ -8,7 +8,7 @@ export function loadGoogleMaps(apiKey) {
 
   _promise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=geometry`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=geometry,places`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve(window.google);

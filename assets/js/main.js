@@ -33,18 +33,19 @@ const importStatus = $('import-status');
 const scrollHint   = $('scroll-hint');
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const router   = new RouteService();
-const tracker  = new StepsTracker();
-let terrain    = null;
-let routeData  = null;
+const router  = new RouteService();
+const tracker = new StepsTracker();
+let terrain   = null;
+let routeData = null;
+let mapsReady = false;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function init() {
   const saved = loadState();
-  if (saved?.apiKey)   inputApiKey.value = saved.apiKey;
-  if (saved?.start)    inputStart.value  = saved.start;
-  if (saved?.end)      inputEnd.value    = saved.end;
-  if (saved?.steps)    tracker.load(saved.steps);
+  if (saved?.apiKey) inputApiKey.value = saved.apiKey;
+  if (saved?.start)  inputStart.value  = saved.start;
+  if (saved?.end)    inputEnd.value    = saved.end;
+  if (saved?.steps)  tracker.load(saved.steps);
 
   btnCalc.addEventListener('click', onCalculate);
   btnBack.addEventListener('click', () => show(screenSetup));
@@ -53,12 +54,48 @@ function init() {
   inputHealth.addEventListener('change', onHealthImport);
   tracker.onChange = onStepsChanged;
 
-  // Restore route without re-fetching if all data is saved
+  // Try to load Maps API as soon as the key field loses focus
+  inputApiKey.addEventListener('blur', tryLoadMaps);
+  // Also try immediately if we already have a saved key
+  if (inputApiKey.value.trim()) tryLoadMaps();
+
   if (saved?.routeData) restoreRoute(saved);
 
   setTimeout(() => scrollHint.classList.add('hidden'), 3500);
 }
 
+// ── Google Maps lazy load + autocomplete ──────────────────────────────────────
+async function tryLoadMaps() {
+  if (mapsReady) return;
+  const key = inputApiKey.value.trim();
+  if (!key) return;
+  try {
+    await loadGoogleMaps(key);
+    mapsReady = true;
+    router.init();
+    initAutocomplete();
+  } catch (_) {
+    // Silently ignore — error will surface when user clicks Calculate
+  }
+}
+
+function initAutocomplete() {
+  if (!window.google?.maps?.places) return;
+  const opts = { fields: ['formatted_address', 'name'] };
+  const acStart = new google.maps.places.Autocomplete(inputStart, opts);
+  const acEnd   = new google.maps.places.Autocomplete(inputEnd, opts);
+  // Keep input value in sync when user picks a suggestion
+  acStart.addListener('place_changed', () => {
+    const p = acStart.getPlace();
+    inputStart.value = p.formatted_address || p.name || inputStart.value;
+  });
+  acEnd.addListener('place_changed', () => {
+    const p = acEnd.getPlace();
+    inputEnd.value = p.formatted_address || p.name || inputEnd.value;
+  });
+}
+
+// ── Screen helpers ────────────────────────────────────────────────────────────
 function show(screen) {
   screenSetup.classList.remove('active');
   screenHike.classList.remove('active');
@@ -81,12 +118,14 @@ async function onCalculate() {
 
   btnCalc.disabled = true;
   try {
-    setStatus('Cargando Google Maps...');
-    await loadGoogleMaps(apiKey);
-    router.init();
-
+    if (!mapsReady) {
+      setStatus('Cargando Google Maps...');
+      await loadGoogleMaps(apiKey);
+      mapsReady = true;
+      router.init();
+      initAutocomplete();
+    }
     routeData = await router.buildRoute(start, end, setStatus);
-
     saveState({ apiKey, start, end, routeData, steps: tracker.serialize() });
     beginHike();
   } catch (err) {
@@ -98,8 +137,12 @@ async function onCalculate() {
 
 async function restoreRoute(saved) {
   try {
-    await loadGoogleMaps(saved.apiKey);
-    router.init();
+    if (!mapsReady) {
+      await loadGoogleMaps(saved.apiKey);
+      mapsReady = true;
+      router.init();
+      initAutocomplete();
+    }
     routeData = saved.routeData;
     beginHike();
   } catch (_) {}
@@ -107,8 +150,8 @@ async function restoreRoute(saved) {
 
 // ── Hike screen ───────────────────────────────────────────────────────────────
 function beginHike() {
-  labelStart.textContent = shortAddr(routeData.startName);
-  labelEnd.textContent   = shortAddr(routeData.endName);
+  labelStart.textContent  = shortAddr(routeData.startName);
+  labelEnd.textContent    = shortAddr(routeData.endName);
   statTotalKm.textContent = (routeData.totalDistanceM / 1000).toFixed(1);
 
   show(screenHike);
@@ -156,10 +199,10 @@ function onStepsChanged() {
 // ── Stats & badges ────────────────────────────────────────────────────────────
 function updateStats() {
   if (!routeData) return;
-  const walkedKm  = tracker.distanceKm;
-  const totalKm   = routeData.totalDistanceM / 1000;
-  const leftKm    = Math.max(0, totalKm - walkedKm);
-  const pct       = Math.min(100, (walkedKm / totalKm) * 100);
+  const walkedKm = tracker.distanceKm;
+  const totalKm  = routeData.totalDistanceM / 1000;
+  const leftKm   = Math.max(0, totalKm - walkedKm);
+  const pct      = Math.min(100, (walkedKm / totalKm) * 100);
 
   statProgKm.textContent  = walkedKm.toFixed(1);
   statTotalKm.textContent = totalKm.toFixed(1);
@@ -167,7 +210,6 @@ function updateStats() {
   statKmDone.textContent  = walkedKm.toFixed(1);
   statKmLeft.textContent  = leftKm.toFixed(1);
   progressFill.style.width = pct + '%';
-
   statElevGain.textContent = elevGainUpTo(routeData.points, tracker.distanceM).toFixed(0);
 }
 
@@ -176,10 +218,8 @@ function updateBadges() {
   const m     = tracker.distanceM;
   const elev  = terrain.getElevationAt(m);
   const biome = terrain.getBiomeAt(m);
-  const theme = getTheme(biome);
-
   badgeElev.textContent  = `${elev.toFixed(0)} m`;
-  badgeBiome.textContent = theme.name;
+  badgeBiome.textContent = getTheme(biome).name;
 }
 
 function elevGainUpTo(points, upToM) {
@@ -198,7 +238,6 @@ function startAutoSave() {
   clearInterval(_saveTimer);
   _saveTimer = setInterval(persistSteps, 30_000);
 }
-
 function persistSteps() {
   const saved = loadState();
   if (saved) saveState({ ...saved, steps: tracker.serialize() });
