@@ -15,14 +15,22 @@ export class RouteService {
   _calcRoute(origin, destination, mode) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new Error('timeout')),
+        () => reject(new Error('La solicitud de ruta tardó demasiado (timeout). Comprueba tu conexión.')),
         DIRECTIONS_TIMEOUT_MS
       );
       this.directions.route(
         { origin, destination, travelMode: mode },
         (res, status) => {
           clearTimeout(timer);
-          status === 'OK' ? resolve(res) : reject(new Error(status));
+          if (status === 'OK') { resolve(res); return; }
+          if (status === 'REQUEST_DENIED')
+            reject(new Error('Directions API denegada. Activa "Directions API" en Google Cloud Console y asegúrate de tener facturación habilitada.'));
+          else if (status === 'ZERO_RESULTS')
+            reject(new Error('No se encontró ruta entre estos dos lugares.'));
+          else if (status === 'NOT_FOUND')
+            reject(new Error('No se reconoció uno de los lugares. Prueba con un nombre más completo.'));
+          else
+            reject(new Error(`Error de ruta: ${status}`));
         }
       );
     });
@@ -32,7 +40,13 @@ export class RouteService {
     return new Promise((resolve, reject) => {
       this.elevation.getElevationAlongPath(
         { path, samples },
-        (res, status) => status === 'OK' ? resolve(res) : reject(new Error(`Error al obtener altitudes (${status}).`))
+        (res, status) => {
+          if (status === 'OK') { resolve(res); return; }
+          if (status === 'REQUEST_DENIED')
+            reject(new Error('Elevation API denegada. Activa "Elevation API" en Google Cloud Console.'));
+          else
+            reject(new Error(`Error al obtener altitudes (${status}).`));
+        }
       );
     });
   }
@@ -40,8 +54,11 @@ export class RouteService {
   _geocode(address) {
     return new Promise((resolve, reject) => {
       this.geocoder.geocode({ address }, (results, status) => {
-        if (status === 'OK') resolve(results[0]);
-        else reject(new Error(`No se encontró "${address}"`));
+        if (status === 'OK') { resolve(results[0]); return; }
+        if (status === 'REQUEST_DENIED')
+          reject(new Error('API key denegada. Activa "Geocoding API" o comprueba la facturación en Google Cloud Console.'));
+        else
+          reject(new Error(`No se encontró "${address}" (${status})`));
       });
     });
   }
@@ -84,12 +101,14 @@ export class RouteService {
   }
 
   async buildRoute(origin, destination, onStatus) {
+    console.log('[World Hike] buildRoute', { origin, destination });
     onStatus('Calculando ruta...');
 
     let path, distanceM, startName, endName;
 
     // 1. Try walking
     try {
+      console.log('[World Hike] Trying walking route...');
       const dir = await this._calcRoute(origin, destination, google.maps.TravelMode.WALKING);
       path        = this._extractPath(dir);
       distanceM   = this._totalDistanceM(dir);
@@ -98,6 +117,7 @@ export class RouteService {
     } catch (_walkErr) {
       // 2. Try driving
       try {
+        console.log('[World Hike] Walking failed, trying driving...');
         onStatus('Ruta a pie no disponible, probando en coche...');
         const dir = await this._calcRoute(origin, destination, google.maps.TravelMode.DRIVING);
         path        = this._extractPath(dir);
@@ -106,6 +126,7 @@ export class RouteService {
         endName     = dir.routes[0].legs.at(-1).end_address;
       } catch (_driveErr) {
         // 3. Straight-line fallback (always works for any two places on Earth)
+        console.log('[World Hike] Driving failed, falling back to straight line...');
         onStatus('Calculando ruta en línea recta con altitudes reales...');
         ({ path, distanceM, startName, endName } = await this._straightLine(origin, destination));
       }

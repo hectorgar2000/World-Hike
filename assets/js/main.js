@@ -84,17 +84,19 @@ async function tryLoadMaps() {
 
 function initAutocomplete() {
   if (!window.google?.maps?.places) return;
-  const opts = { fields: ['formatted_address', 'name'] };
+  const opts = { fields: ['formatted_address', 'geometry', 'name'] };
   const acStart = new google.maps.places.Autocomplete(inputStart, opts);
   const acEnd   = new google.maps.places.Autocomplete(inputEnd, opts);
-  // Keep input value in sync when user picks a suggestion
+  // Only overwrite when the user actually selected a real suggestion (has geometry).
+  // If place_changed fires without a geometry it means the user typed and pressed
+  // Enter without picking from the dropdown — keep whatever they typed.
   acStart.addListener('place_changed', () => {
     const p = acStart.getPlace();
-    inputStart.value = p.formatted_address || p.name || inputStart.value;
+    if (p?.geometry) inputStart.value = p.formatted_address || p.name || inputStart.value;
   });
   acEnd.addListener('place_changed', () => {
     const p = acEnd.getPlace();
-    inputEnd.value = p.formatted_address || p.name || inputEnd.value;
+    if (p?.geometry) inputEnd.value = p.formatted_address || p.name || inputEnd.value;
   });
 }
 
@@ -136,7 +138,8 @@ async function onCalculate() {
     saveState({ apiKey, start, end, routeData, steps: tracker.serialize() });
     beginHike();
   } catch (err) {
-    setStatus(err.message, true);
+    console.error('[World Hike] onCalculate error:', err);
+    setStatus(err.message || 'Error desconocido. Abre la consola del navegador (F12) para ver detalles.', true);
   } finally {
     btnCalc.disabled = false;
   }
