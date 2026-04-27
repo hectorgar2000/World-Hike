@@ -138,3 +138,9 @@ distancia_km = pasos_totales × 0.762 / 1000
 - Definidas todas las decisiones de arquitectura con el usuario
 - Creado este archivo de contexto
 - Iniciada implementación v1 (web app)
+
+### Sesión 2 — 2026-04-27
+
+- Retomado el proyecto en el repo renombrado `hectorgar2000/World-Hike`
+- Actualizado README.md con descripción correcta del proyecto (antes tenía contenido de Pokedex)
+- Commiteados y pusheados los cambios pendientes de README.md y HIKING_APP_CONTEXT.md

@@ -1,45 +1,38 @@
-# Pokemon
+# World Hike
 
-Creación y diseño de una pokedex usando **[pokeapi.co](https://pokeapi.co/)**, una API de Pokemon que nos permite obtener una lista y características de los distintos tipos de Pokemon
+App de fitness gamificada inspirada en **Fantasy Hike** (Forge7 AB). Convierte tus pasos reales en una aventura visual: elige cualquier ruta del mundo real y el personaje avanza por un terreno 2D side-scroll con biomas, parallax y elevación real.
 
-## Tecnologías​ :hammer_and_wrench:
+## Características v1 (Web App)
 
-- Html
+- Ruta personalizable: cualquier punto de partida y destino del mundo real
+- Perfil de elevación real vía **Google Elevation API**
+- Visualización 2D side-scroll con terreno, biomas y parallax
+- Registro de pasos manual o importación de XML de Apple Health
+- Persistencia del progreso en localStorage
+- Detección automática de bioma (galicia, meseta, mediterráneo, alpino, highland, templado)
 
-- Css
+## Tecnologías
 
-- Sass
+- HTML / CSS / JavaScript vanilla (sin build tools)
+- Google Maps JavaScript API (DirectionsService + ElevationService + Places Autocomplete)
+- Canvas 2D
 
-- Bem
+## Uso
 
-- Bootstrap
+1. Abre `index.html` en el navegador
+2. Introduce tu API key de Google Maps
+3. Define punto de partida y destino
+4. Empieza a caminar y registra tus pasos
 
-- Jquery
-
-**Visual Studio Code** ( Editor recomendado ) ✔️
-
-https://code.visualstudio.com/
-
-## Clonar proyecto
+## Conversión pasos → distancia
 
 ```
-git clone https://github.com/SergiRM/pokedex.git
+1 paso = 0.762 m  (media adulto)
+distancia_km = pasos × 0.762 / 1000
 ```
 
-## Documentación :book:
+## Roadmap
 
-Se utilizaran los siguientes Endpoints:
-
-- Listado y características de los pokemones
-
-  https://pokeapi.co/api/v2/pokemon/
-
-- Tipos de pokemones
-
-  https://pokeapi.co/api/v2/type/
-
-- Información de cada pokemon
-
-  https://pokeapi.co/api/v2/pokemon-species/
-
-Para obtener más información, consulte la documentación en https://pokeapi.co/
+- **v2:** App iOS nativa (HealthKit automático) + Android (Health Connect)
+- Backend para progreso en la nube y modo multijugador
+- Hitos y logros por lugares de la ruta
