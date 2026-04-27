@@ -304,26 +304,3 @@ input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 input[type=number] { -moz-appearance: textfield; }
 
-/* ── Google Places Autocomplete dropdown ── */
-.pac-container {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-  font-family: var(--font);
-  margin-top: -1px;
-}
-.pac-item {
-  padding: 9px 14px;
-  color: var(--text-dim);
-  font-size: 14px;
-  cursor: pointer;
-  border-top: 1px solid var(--border);
-}
-.pac-item:hover, .pac-item-selected { background: var(--surface); color: var(--text); }
-.pac-item-query { color: var(--text); font-weight: 600; }
-.pac-icon { display: none; }
-.pac-matched { color: var(--accent); }
-/* Hide Google logo inside dropdown */
-.pac-logo::after { display: none; }

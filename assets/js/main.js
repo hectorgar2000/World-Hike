@@ -71,33 +71,12 @@ async function tryLoadMaps() {
   if (!key) return;
   try {
     await loadGoogleMaps(key);
-    // Re-check after await: a concurrent call (restoreRoute / onCalculate)
-    // may have already initialized while we were suspended.
     if (mapsReady) return;
     mapsReady = true;
     router.init();
-    initAutocomplete();
   } catch (_) {
     // Silently ignore — error will surface when user clicks Calculate
   }
-}
-
-function initAutocomplete() {
-  if (!window.google?.maps?.places) return;
-  const opts = { fields: ['formatted_address', 'geometry', 'name'] };
-  const acStart = new google.maps.places.Autocomplete(inputStart, opts);
-  const acEnd   = new google.maps.places.Autocomplete(inputEnd, opts);
-  // Only overwrite when the user actually selected a real suggestion (has geometry).
-  // If place_changed fires without a geometry it means the user typed and pressed
-  // Enter without picking from the dropdown — keep whatever they typed.
-  acStart.addListener('place_changed', () => {
-    const p = acStart.getPlace();
-    if (p?.geometry) inputStart.value = p.formatted_address || p.name || inputStart.value;
-  });
-  acEnd.addListener('place_changed', () => {
-    const p = acEnd.getPlace();
-    if (p?.geometry) inputEnd.value = p.formatted_address || p.name || inputEnd.value;
-  });
 }
 
 // ── Screen helpers ────────────────────────────────────────────────────────────
@@ -131,7 +110,6 @@ async function onCalculate() {
       if (!mapsReady) {
         mapsReady = true;
         router.init();
-        initAutocomplete();
       }
     }
     routeData = await router.buildRoute(start, end, setStatus);
@@ -152,7 +130,6 @@ async function restoreRoute(saved) {
       if (!mapsReady) {
         mapsReady = true;
         router.init();
-        initAutocomplete();
       }
     }
     routeData = saved.routeData;
