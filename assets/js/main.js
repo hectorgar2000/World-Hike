@@ -71,6 +71,9 @@ async function tryLoadMaps() {
   if (!key) return;
   try {
     await loadGoogleMaps(key);
+    // Re-check after await: a concurrent call (restoreRoute / onCalculate)
+    // may have already initialized while we were suspended.
+    if (mapsReady) return;
     mapsReady = true;
     router.init();
     initAutocomplete();
@@ -100,7 +103,9 @@ function show(screen) {
   screenSetup.classList.remove('active');
   screenHike.classList.remove('active');
   screen.classList.add('active');
-  if (screen === screenHike && terrain) terrain._resize();
+  // Defer resize so the browser has laid out the newly-visible screen before
+  // we ask for its dimensions via getBoundingClientRect.
+  if (screen === screenHike && terrain) requestAnimationFrame(() => terrain._resize());
 }
 
 function setStatus(msg, isError = false) {
@@ -121,9 +126,11 @@ async function onCalculate() {
     if (!mapsReady) {
       setStatus('Cargando Google Maps...');
       await loadGoogleMaps(apiKey);
-      mapsReady = true;
-      router.init();
-      initAutocomplete();
+      if (!mapsReady) {
+        mapsReady = true;
+        router.init();
+        initAutocomplete();
+      }
     }
     routeData = await router.buildRoute(start, end, setStatus);
     saveState({ apiKey, start, end, routeData, steps: tracker.serialize() });
@@ -139,9 +146,11 @@ async function restoreRoute(saved) {
   try {
     if (!mapsReady) {
       await loadGoogleMaps(saved.apiKey);
-      mapsReady = true;
-      router.init();
-      initAutocomplete();
+      if (!mapsReady) {
+        mapsReady = true;
+        router.init();
+        initAutocomplete();
+      }
     }
     routeData = saved.routeData;
     beginHike();
